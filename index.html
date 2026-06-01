@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>極簡踩地雷 - 5關挑戰</title>
+    <title>極簡踩地雷 - 5關挑戰（含排行榜）</title>
     <style>
         :root {
             --bg-color: #f0f2f5;
@@ -36,6 +36,7 @@
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             text-align: center;
+            box-sizing: border-box;
         }
 
         h1 {
@@ -68,7 +69,7 @@
         }
 
         .grid-container {
-            overflow-auto: auto;
+            overflow: auto;
             margin: 0 auto 20px auto;
             max-width: 100%;
             display: inline-block;
@@ -145,11 +146,6 @@
             opacity: 0.9;
         }
 
-        button:disabled {
-            background-color: #bcc0c4;
-            cursor: not-allowed;
-        }
-
         .message {
             font-size: 18px;
             font-weight: bold;
@@ -165,12 +161,80 @@
             color: #8a8d91;
             margin-top: 10px;
         }
+
+        /* 排行榜與遮罩樣式 */
+        .leaderboard-section {
+            margin-top: 30px;
+            border-top: 2px dashed #e4e6eb;
+            padding-top: 20px;
+        }
+
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .leaderboard-table th, .leaderboard-table td {
+            padding: 8px;
+            text-align: center;
+            border-bottom: 1px solid #e4e6eb;
+        }
+
+        .leaderboard-table th {
+            background-color: #f7f8fa;
+            color: #65676b;
+        }
+
+        /* 彈出視窗（輸入名字） */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+
+        .modal h2 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+
+        .modal input {
+            width: 80%;
+            padding: 10px;
+            margin: 15px 0;
+            border: 1px solid #ccd0d5;
+            border-radius: 6px;
+            font-size: 16px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>踩地雷 5關大挑戰</h1>
+    <h1>踩地雷 5關大挑戰 🚩</h1>
     
     <div class="status-panel">
         <div class="status-item">
@@ -201,17 +265,43 @@
         <button id="action-btn" onclick="nextAction()">開始遊戲</button>
     </div>
     
-    <div class="tip">提示：點擊左鍵翻開，按住 [Shift + 點擊] 或按滑鼠右鍵可插旗子 🚩</div>
+    <div class="tip">提示：點擊左鍵翻開，按住 [Shift + 點擊] 或按右鍵可插旗子 🚩</div>
+
+    <div class="leaderboard-section">
+        <h3>🏆 榮譽排行榜</h3>
+        <table class="leaderboard-table">
+            <thead>
+                <tr>
+                    <th>名次</th>
+                    <th>玩家名字</th>
+                    <th>最終分數</th>
+                    <th>到達關卡</th>
+                </tr>
+            </thead>
+            <tbody id="leaderboard-body">
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="name-modal" class="modal-overlay">
+    <div class="modal">
+        <h2>🎉 挑戰結束！</h2>
+        <p>留名青史的時刻到了！請輸入你的名字：</p>
+        <input type="text" id="player-name" placeholder="輸入你的名字..." maxlength="10">
+        <br>
+        <button onclick="submitScore()">提交分數</button>
+    </div>
 </div>
 
 <script>
-    // 關卡設定 (行數, 列數, 地雷數)
+    // 關卡設定
     const levels = [
-        { rows: 8, cols: 8, mines: 8 },    // 第一關：入門
-        { rows: 9, cols: 9, mines: 12 },   // 第二關：初階
-        { rows: 10, cols: 10, mines: 18 }, // 第三關：中階
-        { rows: 11, cols: 11, mines: 25 }, // 第四關：進階
-        { rows: 12, cols: 12, mines: 35 }  // 第五關：終極挑戰
+        { rows: 8, cols: 8, mines: 8 },    // 第一關
+        { rows: 9, cols: 9, mines: 12 },   // 第二關
+        { rows: 10, cols: 10, mines: 18 }, // 第三關
+        { rows: 11, cols: 11, mines: 25 }, // 第四關
+        { rows: 12, cols: 12, mines: 35 }  // 第五關
     ];
 
     let currentLevelIndex = 0;
@@ -231,8 +321,16 @@
     const scoreDisplay = document.getElementById('score-display');
     const messageEl = document.getElementById('message');
     const actionBtn = document.getElementById('action-btn');
+    const nameModal = document.getElementById('name-modal');
+    const playerNameInput = document.getElementById('player-name');
+    const leaderboardBody = document.getElementById('leaderboard-body');
 
-    // 初始化遊戲
+    // 初始化與讀取排行榜
+    window.onload = function() {
+        renderLeaderboard();
+        initGame();
+    };
+
     function initGame() {
         clearInterval(timerInterval);
         timeElapsed = 0;
@@ -250,7 +348,6 @@
         levelDisplay.textContent = `${currentLevelIndex + 1} / 5`;
         mineCountEl.textContent = config.mines;
 
-        // 建立網格
         gridEl.style.gridTemplateColumns = `repeat(${config.cols}, 30px)`;
         gridEl.innerHTML = '';
         
@@ -259,29 +356,18 @@
             grid[r] = [];
             for (let c = 0; c < config.cols; c++) {
                 const cell = {
-                    row: r,
-                    col: c,
-                    isMine: false,
-                    isRevealed: false,
-                    isFlagged: false,
+                    row: r, col: c,
+                    isMine: false, isRevealed: false, isFlagged: false,
                     neighborMines: 0,
                     element: document.createElement('div')
                 };
                 
                 cell.element.classList.add('cell');
-                
-                // 綁定事件
                 cell.element.addEventListener('click', (e) => {
-                    if (e.shiftKey) {
-                        toggleFlag(cell);
-                    } else {
-                        revealCell(cell);
-                    }
+                    if (e.shiftKey) toggleFlag(cell); else revealCell(cell);
                 });
-                
                 cell.element.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    toggleFlag(cell);
+                    e.preventDefault(); toggleFlag(cell);
                 });
 
                 gridEl.appendChild(cell.element);
@@ -290,28 +376,20 @@
         }
     }
 
-    // 第一次點擊後才佈雷，確保首點絕非地雷
     function generateMines(firstRow, firstCol) {
         const config = levels[currentLevelIndex];
         let minesPlanted = 0;
-
         while (minesPlanted < config.mines) {
             const r = Math.floor(Math.random() * config.rows);
             const c = Math.floor(Math.random() * config.cols);
-
-            // 不能重複佈雷，且不能在玩家第一次點擊的格子及其周圍 8 格
             if (!grid[r][c].isMine && !(Math.abs(r - firstRow) <= 1 && Math.abs(c - firstCol) <= 1)) {
                 grid[r][c].isMine = true;
                 minesPlanted++;
             }
         }
-
-        // 計算周圍地雷數
         for (let r = 0; r < config.rows; r++) {
             for (let c = 0; c < config.cols; c++) {
-                if (!grid[r][c].isMine) {
-                    grid[r][c].neighborMines = countNeighborMines(r, c);
-                }
+                if (!grid[r][c].isMine) grid[r][c].neighborMines = countNeighborMines(r, c);
             }
         }
     }
@@ -321,8 +399,7 @@
         let count = 0;
         for (let dr = -1; dr <= 1; dr++) {
             for (let dc = -1; dc <= 1; dc++) {
-                const nr = row + dr;
-                const nc = col + dc;
+                const nr = row + dr, nc = col + dc;
                 if (nr >= 0 && nr < config.rows && nc >= 0 && nc < config.cols) {
                     if (grid[nr][nc].isMine) count++;
                 }
@@ -331,7 +408,6 @@
         return count;
     }
 
-    // 啟動計時器
     function startTimer() {
         timerInterval = setInterval(() => {
             timeElapsed++;
@@ -339,11 +415,9 @@
         }, 1000);
     }
 
-    // 翻開格子
     function revealCell(cell) {
         if (gameOver || cell.isRevealed || cell.isFlagged) return;
 
-        // 第一次點擊觸發
         if (isFirstClick) {
             isFirstClick = false;
             generateMines(cell.row, cell.col);
@@ -354,16 +428,13 @@
         revealedCount++;
         cell.element.classList.add('revealed');
 
-        // 踩到雷，遊戲結束
         if (cell.isMine) {
             endGame(false);
             return;
         }
 
-        // 基本分數：每翻開一格安全格 +10 分
-        updateScore(10);
+        updateScore(10); // 安全加分
 
-        // 如果周圍沒地雷，遞迴翻開鄰居
         if (cell.neighborMines === 0) {
             revealNeighbors(cell.row, cell.col);
         } else {
@@ -378,63 +449,45 @@
         const config = levels[currentLevelIndex];
         for (let dr = -1; dr <= 1; dr++) {
             for (let dc = -1; dc <= 1; dc++) {
-                const nr = row + dr;
-                const nc = col + dc;
+                const nr = row + dr, nc = col + dc;
                 if (nr >= 0 && nr < config.rows && nc >= 0 && nc < config.cols) {
                     const neighbor = grid[nr][nc];
-                    if (!neighbor.isRevealed && !neighbor.isFlagged) {
-                        revealCell(neighbor);
-                    }
+                    if (!neighbor.isRevealed && !neighbor.isFlagged) revealCell(neighbor);
                 }
             }
         }
     }
 
-    // 插旗功能
     function toggleFlag(cell) {
         if (gameOver || cell.isRevealed) return;
-
         const config = levels[currentLevelIndex];
         if (!cell.isFlagged) {
-            cell.isFlagged = true;
-            flaggedCount++;
-            cell.element.classList.add('flagged');
-            cell.element.textContent = '🚩';
+            cell.isFlagged = true; flaggedCount++;
+            cell.element.classList.add('flagged'); cell.element.textContent = '🚩';
         } else {
-            cell.isFlagged = false;
-            flaggedCount--;
-            cell.element.classList.remove('flagged');
-            cell.element.textContent = '';
+            cell.isFlagged = false; flaggedCount--;
+            cell.element.classList.remove('flagged'); cell.element.textContent = '';
         }
-        
         mineCountEl.textContent = config.mines - flaggedCount;
     }
 
-    // 檢查是否過關
     function checkWinCondition() {
         const config = levels[currentLevelIndex];
-        const totalCells = config.rows * config.cols;
-        const safeCells = totalCells - config.mines;
-
-        if (revealedCount === safeCells) {
+        if (revealedCount === (config.rows * config.cols) - config.mines) {
             endGame(true);
         }
     }
 
-    // 分數計算
     function updateScore(amount) {
         totalScore += amount;
         scoreDisplay.textContent = totalScore;
     }
 
-    // 結束遊戲（贏或輸）
     function endGame(isWin) {
         gameOver = true;
         clearInterval(timerInterval);
 
         const config = levels[currentLevelIndex];
-
-        // 顯示所有地雷
         for (let r = 0; r < config.rows; r++) {
             for (let c = 0; c < config.cols; c++) {
                 if (grid[r][c].isMine) {
@@ -445,50 +498,121 @@
         }
 
         if (isWin) {
-            // 過關獎勵分數：關卡基礎 500 分，並依據速度扣減（越快分數越高，最低給 50 分）
             const timeBonus = Math.max(50, 500 - timeElapsed * 5);
             updateScore(timeBonus);
 
             if (currentLevelIndex < levels.length - 1) {
-                messageEl.textContent = `🎉 恭喜通過第 ${currentLevelIndex + 1} 關！獲得時間獎勵 ${timeBonus} 分。`;
+                messageEl.textContent = `🎉 恭喜通過第 ${currentLevelIndex + 1} 關！獎勵 ${timeBonus} 分。`;
                 messageEl.classList.add('win-text');
                 actionBtn.textContent = "進入下一關";
             } else {
                 messageEl.textContent = `🏆 終極通關！你成功突破了所有關卡！總分：${totalScore}`;
                 messageEl.classList.add('win-text');
-                actionBtn.textContent = "再玩一次 (重置)";
+                actionBtn.textContent = "查看結局";
+                setTimeout(openNameModal, 1200); // 完美破關彈出排行榜登錄
             }
         } else {
-            messageEl.textContent = `💥 踩到地雷了！第 ${currentLevelIndex + 1} 關挑戰失敗。`;
+            messageEl.textContent = `💥 踩到地雷了！遊戲結束。`;
             messageEl.classList.add('lose-text');
-            actionBtn.textContent = "重新本關";
+            actionBtn.textContent = "重新挑戰";
+            setTimeout(openNameModal, 1200); // 失敗了也能登錄現有分數
         }
     }
 
-    // 按鈕控制邏輯
     function nextAction() {
         if (gameOver) {
             const config = levels[currentLevelIndex];
-            const totalCells = config.rows * config.cols;
-            const safeCells = totalCells - config.mines;
-            
-            // 如果贏了
-            if (revealedCount === safeCells) {
+            if (revealedCount === (config.rows * config.cols) - config.mines) {
                 if (currentLevelIndex < levels.length - 1) {
-                    currentLevelIndex++; // 晉級下一關
+                    currentLevelIndex++;
+                    initGame();
                 } else {
-                    currentLevelIndex = 0; // 全破重置
-                    totalScore = 0;
-                    scoreDisplay.textContent = totalScore;
+                    // 全破後點擊按鈕重置
+                    resetFullGame();
                 }
+            } else {
+                // 失敗後點擊按鈕重置
+                resetFullGame();
             }
-            // 如果輸了，currentLevelIndex 不變，直接重新挑戰本關
+        } else {
+            initGame();
         }
+    }
+
+    function resetFullGame() {
+        currentLevelIndex = 0;
+        totalScore = 0;
+        scoreDisplay.textContent = totalScore;
         initGame();
     }
 
-    // 網頁載入後先初始化第一關
-    initGame();
+    // 排行榜邏輯 (LocalStorage)
+    function openNameModal() {
+        nameModal.classList.add('active');
+        playerNameInput.focus();
+    }
+
+    function submitScore() {
+        const name = playerNameInput.value.trim() || "無名英雄";
+        const reachedLevel = currentLevelIndex + 1;
+
+        // 取得舊排行榜
+        let leaderboard = JSON.parse(localStorage.getItem('minesweeper_leaderboard')) || [];
+        
+        // 加入新紀錄
+        leaderboard.push({
+            name: name,
+            score: totalScore,
+            level: `第 ${reachedLevel} 關`
+        });
+
+        // 排序 (分數高到低)
+        leaderboard.sort((a, b) => b.score - a.score);
+
+        // 只保留前 8 名
+        leaderboard = leaderboard.slice(0, 8);
+
+        // 存回 LocalStorage
+        localStorage.setItem('minesweeper_leaderboard', JSON.stringify(leaderboard));
+
+        // 關閉視窗與更新畫面
+        nameModal.classList.remove('active');
+        playerNameInput.value = "";
+        renderLeaderboard();
+    }
+
+    function renderLeaderboard() {
+        const leaderboard = JSON.parse(localStorage.getItem('minesweeper_leaderboard')) || [];
+        leaderboardBody.innerHTML = "";
+
+        if (leaderboard.length === 0) {
+            leaderboardBody.innerHTML = `<tr><td colspan="4" style="color:#8a8d91;">暫無紀錄，快來搶佔第一名！</td></tr>`;
+            return;
+        }
+
+        leaderboard.forEach((record, index) => {
+            const row = document.createElement('tr');
+            
+            // 前三名加上皇冠或特殊符號
+            let medal = index + 1;
+            if (index === 0) medal = '🥇';
+            if (index === 1) medal = '🥈';
+            if (index === 2) medal = '🥉';
+
+            row.innerHTML = `
+                <td>${medal}</td>
+                <td><strong>${escapeHTML(record.name)}</strong></td>
+                <td style="color:#1877f2; font-weight:bold;">${record.score}</td>
+                <td>${record.level}</td>
+            `;
+            leaderboardBody.appendChild(row);
+        });
+    }
+
+    // 防止 XSS 注入安全防護
+    function escapeHTML(str) {
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
 </script>
 
 </body>
