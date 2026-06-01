@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>極簡踩地雷 - 5關挑戰</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --panel-bg: #ffffff;
+            --cell-bg: #e4e6eb;
+            --cell-revealed: #f8f9fa;
+            --text-color: #1c1e21;
+            --primary-color: #1877f2;
+            --mine-color: #e41e3f;
+            --flag-color: #f5b041;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: var(--panel-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        h1 {
+            margin-top: 0;
+            color: var(--primary-color);
+            font-size: 24px;
+        }
+
+        .status-panel {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+            background: #f7f8fa;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .status-item div:first-child {
+            color: #65676b;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .status-item div:last-child {
+            font-size: 16px;
+            color: #050505;
+        }
+
+        .grid-container {
+            overflow-auto: auto;
+            margin: 0 auto 20px auto;
+            max-width: 100%;
+            display: inline-block;
+            background: #bcc0c4;
+            padding: 6px;
+            border-radius: 8px;
+        }
+
+        .grid {
+            display: grid;
+            gap: 2px;
+            user-select: none;
+        }
+
+        .cell {
+            width: 30px;
+            height: 30px;
+            background-color: var(--cell-bg);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+
+        .cell:hover {
+            background-color: #d8dadf;
+        }
+
+        .cell.revealed {
+            background-color: var(--cell-revealed);
+            cursor: default;
+        }
+
+        .cell.mine {
+            background-color: var(--mine-color) !important;
+            color: white;
+        }
+
+        .cell.flagged {
+            background-color: var(--flag-color) !important;
+        }
+
+        /* 數字顏色 */
+        .n-1 { color: #1877f2; }
+        .n-2 { color: #00a400; }
+        .n-3 { color: #fa3e3e; }
+        .n-4 { color: #764abc; }
+        .n-5 { color: #ff7a00; }
+        .n-6 { color: #00d2c4; }
+        .n-7 { color: #000000; }
+        .n-8 { color: #808080; }
+
+        .controls {
+            margin-top: 15px;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button:disabled {
+            background-color: #bcc0c4;
+            cursor: not-allowed;
+        }
+
+        .message {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 15px 0;
+            min-height: 27px;
+        }
+        
+        .win-text { color: #00a400; }
+        .lose-text { color: var(--mine-color); }
+        
+        .tip {
+            font-size: 12px;
+            color: #8a8d91;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>踩地雷 5關大挑戰</h1>
+    
+    <div class="status-panel">
+        <div class="status-item">
+            <div>當前關卡</div>
+            <div id="level-display">1 / 5</div>
+        </div>
+        <div class="status-item">
+            <div>賸餘地雷</div>
+            <div id="mine-count">0</div>
+        </div>
+        <div class="status-item">
+            <div>時間</div>
+            <div id="timer">0 秒</div>
+        </div>
+        <div class="status-item">
+            <div>總積分</div>
+            <div id="score-display">0</div>
+        </div>
+    </div>
+
+    <div class="grid-container">
+        <div id="grid" class="grid"></div>
+    </div>
+
+    <div id="message" class="message"></div>
+
+    <div class="controls">
+        <button id="action-btn" onclick="nextAction()">開始遊戲</button>
+    </div>
+    
+    <div class="tip">提示：點擊左鍵翻開，按住 [Shift + 點擊] 或按滑鼠右鍵可插旗子 🚩</div>
+</div>
+
+<script>
+    // 關卡設定 (行數, 列數, 地雷數)
+    const levels = [
+        { rows: 8, cols: 8, mines: 8 },    // 第一關：入門
+        { rows: 9, cols: 9, mines: 12 },   // 第二關：初階
+        { rows: 10, cols: 10, mines: 18 }, // 第三關：中階
+        { rows: 11, cols: 11, mines: 25 }, // 第四關：進階
+        { rows: 12, cols: 12, mines: 35 }  // 第五關：終極挑戰
+    ];
+
+    let currentLevelIndex = 0;
+    let grid = [];
+    let revealedCount = 0;
+    let flaggedCount = 0;
+    let gameOver = false;
+    let timerInterval = null;
+    let timeElapsed = 0;
+    let totalScore = 0;
+    let isFirstClick = true;
+
+    const gridEl = document.getElementById('grid');
+    const levelDisplay = document.getElementById('level-display');
+    const mineCountEl = document.getElementById('mine-count');
+    const timerEl = document.getElementById('timer');
+    const scoreDisplay = document.getElementById('score-display');
+    const messageEl = document.getElementById('message');
+    const actionBtn = document.getElementById('action-btn');
+
+    // 初始化遊戲
+    function initGame() {
+        clearInterval(timerInterval);
+        timeElapsed = 0;
+        revealedCount = 0;
+        flaggedCount = 0;
+        gameOver = false;
+        isFirstClick = true;
+        
+        timerEl.textContent = "0 秒";
+        messageEl.textContent = "";
+        messageEl.className = "message";
+        actionBtn.textContent = "重新開始";
+        
+        const config = levels[currentLevelIndex];
+        levelDisplay.textContent = `${currentLevelIndex + 1} / 5`;
+        mineCountEl.textContent = config.mines;
+
+        // 建立網格
+        gridEl.style.gridTemplateColumns = `repeat(${config.cols}, 30px)`;
+        gridEl.innerHTML = '';
+        
+        grid = [];
+        for (let r = 0; r < config.rows; r++) {
+            grid[r] = [];
+            for (let c = 0; c < config.cols; c++) {
+                const cell = {
+                    row: r,
+                    col: c,
+                    isMine: false,
+                    isRevealed: false,
+                    isFlagged: false,
+                    neighborMines: 0,
+                    element: document.createElement('div')
+                };
+                
+                cell.element.classList.add('cell');
+                
+                // 綁定事件
+                cell.element.addEventListener('click', (e) => {
+                    if (e.shiftKey) {
+                        toggleFlag(cell);
+                    } else {
+                        revealCell(cell);
+                    }
+                });
+                
+                cell.element.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    toggleFlag(cell);
+                });
+
+                gridEl.appendChild(cell.element);
+                grid[r][c] = cell;
+            }
+        }
+    }
+
+    // 第一次點擊後才佈雷，確保首點絕非地雷
+    function generateMines(firstRow, firstCol) {
+        const config = levels[currentLevelIndex];
+        let minesPlanted = 0;
+
+        while (minesPlanted < config.mines) {
+            const r = Math.floor(Math.random() * config.rows);
+            const c = Math.floor(Math.random() * config.cols);
+
+            // 不能重複佈雷，且不能在玩家第一次點擊的格子及其周圍 8 格
+            if (!grid[r][c].isMine && !(Math.abs(r - firstRow) <= 1 && Math.abs(c - firstCol) <= 1)) {
+                grid[r][c].isMine = true;
+                minesPlanted++;
+            }
+        }
+
+        // 計算周圍地雷數
+        for (let r = 0; r < config.rows; r++) {
+            for (let c = 0; c < config.cols; c++) {
+                if (!grid[r][c].isMine) {
+                    grid[r][c].neighborMines = countNeighborMines(r, c);
+                }
+            }
+        }
+    }
+
+    function countNeighborMines(row, col) {
+        const config = levels[currentLevelIndex];
+        let count = 0;
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                const nr = row + dr;
+                const nc = col + dc;
+                if (nr >= 0 && nr < config.rows && nc >= 0 && nc < config.cols) {
+                    if (grid[nr][nc].isMine) count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    // 啟動計時器
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            timeElapsed++;
+            timerEl.textContent = `${timeElapsed} 秒`;
+        }, 1000);
+    }
+
+    // 翻開格子
+    function revealCell(cell) {
+        if (gameOver || cell.isRevealed || cell.isFlagged) return;
+
+        // 第一次點擊觸發
+        if (isFirstClick) {
+            isFirstClick = false;
+            generateMines(cell.row, cell.col);
+            startTimer();
+        }
+
+        cell.isRevealed = true;
+        revealedCount++;
+        cell.element.classList.add('revealed');
+
+        // 踩到雷，遊戲結束
+        if (cell.isMine) {
+            endGame(false);
+            return;
+        }
+
+        // 基本分數：每翻開一格安全格 +10 分
+        updateScore(10);
+
+        // 如果周圍沒地雷，遞迴翻開鄰居
+        if (cell.neighborMines === 0) {
+            revealNeighbors(cell.row, cell.col);
+        } else {
+            cell.element.textContent = cell.neighborMines;
+            cell.element.classList.add(`n-${cell.neighborMines}`);
+        }
+
+        checkWinCondition();
+    }
+
+    function revealNeighbors(row, col) {
+        const config = levels[currentLevelIndex];
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                const nr = row + dr;
+                const nc = col + dc;
+                if (nr >= 0 && nr < config.rows && nc >= 0 && nc < config.cols) {
+                    const neighbor = grid[nr][nc];
+                    if (!neighbor.isRevealed && !neighbor.isFlagged) {
+                        revealCell(neighbor);
+                    }
+                }
+            }
+        }
+    }
+
+    // 插旗功能
+    function toggleFlag(cell) {
+        if (gameOver || cell.isRevealed) return;
+
+        const config = levels[currentLevelIndex];
+        if (!cell.isFlagged) {
+            cell.isFlagged = true;
+            flaggedCount++;
+            cell.element.classList.add('flagged');
+            cell.element.textContent = '🚩';
+        } else {
+            cell.isFlagged = false;
+            flaggedCount--;
+            cell.element.classList.remove('flagged');
+            cell.element.textContent = '';
+        }
+        
+        mineCountEl.textContent = config.mines - flaggedCount;
+    }
+
+    // 檢查是否過關
+    function checkWinCondition() {
+        const config = levels[currentLevelIndex];
+        const totalCells = config.rows * config.cols;
+        const safeCells = totalCells - config.mines;
+
+        if (revealedCount === safeCells) {
+            endGame(true);
+        }
+    }
+
+    // 分數計算
+    function updateScore(amount) {
+        totalScore += amount;
+        scoreDisplay.textContent = totalScore;
+    }
+
+    // 結束遊戲（贏或輸）
+    function endGame(isWin) {
+        gameOver = true;
+        clearInterval(timerInterval);
+
+        const config = levels[currentLevelIndex];
+
+        // 顯示所有地雷
+        for (let r = 0; r < config.rows; r++) {
+            for (let c = 0; c < config.cols; c++) {
+                if (grid[r][c].isMine) {
+                    grid[r][c].element.classList.add('mine');
+                    grid[r][c].element.textContent = '💣';
+                }
+            }
+        }
+
+        if (isWin) {
+            // 過關獎勵分數：關卡基礎 500 分，並依據速度扣減（越快分數越高，最低給 50 分）
+            const timeBonus = Math.max(50, 500 - timeElapsed * 5);
+            updateScore(timeBonus);
+
+            if (currentLevelIndex < levels.length - 1) {
+                messageEl.textContent = `🎉 恭喜通過第 ${currentLevelIndex + 1} 關！獲得時間獎勵 ${timeBonus} 分。`;
+                messageEl.classList.add('win-text');
+                actionBtn.textContent = "進入下一關";
+            } else {
+                messageEl.textContent = `🏆 終極通關！你成功突破了所有關卡！總分：${totalScore}`;
+                messageEl.classList.add('win-text');
+                actionBtn.textContent = "再玩一次 (重置)";
+            }
+        } else {
+            messageEl.textContent = `💥 踩到地雷了！第 ${currentLevelIndex + 1} 關挑戰失敗。`;
+            messageEl.classList.add('lose-text');
+            actionBtn.textContent = "重新本關";
+        }
+    }
+
+    // 按鈕控制邏輯
+    function nextAction() {
+        if (gameOver) {
+            const config = levels[currentLevelIndex];
+            const totalCells = config.rows * config.cols;
+            const safeCells = totalCells - config.mines;
+            
+            // 如果贏了
+            if (revealedCount === safeCells) {
+                if (currentLevelIndex < levels.length - 1) {
+                    currentLevelIndex++; // 晉級下一關
+                } else {
+                    currentLevelIndex = 0; // 全破重置
+                    totalScore = 0;
+                    scoreDisplay.textContent = totalScore;
+                }
+            }
+            // 如果輸了，currentLevelIndex 不變，直接重新挑戰本關
+        }
+        initGame();
+    }
+
+    // 網頁載入後先初始化第一關
+    initGame();
+</script>
+
+</body>
+</html>
